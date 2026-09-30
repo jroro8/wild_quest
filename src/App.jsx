@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  DEFAULT_STATE, SSYRA_BOOKS, XP_PER_LEVEL, DRIBBLE_UP_ID, GUITAR_ID, RARITY, RANKS, SANCTUARY, STATUS_COLOR,
+  DEFAULT_STATE, SSYRA_BOOKS, XP_PER_LEVEL, DRIBBLE_UP_ID, GUITAR_ID, RARITY, RANKS, SANCTUARY, STATUS_COLOR, dailyQuestion,
   todayStr, yesterdayStr, levelFromXp, xpInLevel, countQuestDays, getRank, getUnlockedRanks,
 } from './data.js';
 import { useGameState } from './sync.js';
@@ -64,6 +64,7 @@ function Game({ state, setState, mode, sync, notice, clearNotice, setupMissing, 
   const [toast, setToast] = useState(null);
   const [levelUp, setLevelUp] = useState(null);
   const [sideFx, setSideFx] = useState(null);
+  const [guide, setGuide] = useState(null); // animal whose field guide page is open
   const prevLevel = useRef(levelFromXp(state.player.xp));
   const toastTimer = useRef(null);
   const earned = useRef(false);      // true only when XP came from a tap on this device
@@ -202,6 +203,20 @@ function Game({ state, setState, mode, sync, notice, clearNotice, setupMissing, 
     showToast(`🎁 ${r.name.toUpperCase()} CLAIMED!`, 'big');
   };
 
+  const answerQuiz = (pick) => {
+    const day = todayStr();
+    if (state.logs.quiz[day]) return;
+    const q = dailyQuestion(day, levelFromXp(state.player.xp));
+    const correct = pick === q.answer;
+    setState(s => ({ ...s, logs: { ...s.logs, quiz: { ...s.logs.quiz, [day]: { qid: q.qid, pick, correct } } } }));
+    if (correct) {
+      addRewards(state.config.quiz.xp, state.config.quiz.credits);
+      showToast(`🧠 CORRECT!  +${state.config.quiz.xp} XP  +${state.config.quiz.credits} ${CUR}`, 'big');
+    } else {
+      showToast('NOT QUITE — READ WHY BELOW', 'info');
+    }
+  };
+
   const equipRank = (rankId) => {
     const rank = getRank(rankId);
     if (rank.unlockLevel > levelFromXp(state.player.xp)) { showToast(`UNLOCKS AT LEVEL ${rank.unlockLevel}`, 'fail'); return; }
@@ -219,14 +234,15 @@ function Game({ state, setState, mode, sync, notice, clearNotice, setupMissing, 
       </div>
       {mode === 'local' && <LocalBanner missing={setupMissing} />}
       <main style={{ padding: '0 14px', maxWidth: 720, margin: '0 auto', position: 'relative', zIndex: 2 }}>
-        {tab === 'base'     && <BaseTab state={state} setTab={setTab} />}
+        {tab === 'base'     && <BaseTab state={state} setTab={setTab} answerQuiz={answerQuiz} openGuide={setGuide} />}
         {tab === 'missions' && <MissionsTab state={state} toggleQuest={toggleQuest} />}
         {tab === 'books'    && <BooksTab state={state} toggleBook={toggleBook} />}
         {tab === 'lab'      && <LabTab state={state} onLog={logMath} />}
-        {tab === 'ranger'   && <RangerTab state={state} equipRank={equipRank} />}
+        {tab === 'ranger'   && <RangerTab state={state} equipRank={equipRank} openGuide={setGuide} />}
         {tab === 'depot'    && <DepotTab state={state} claim={claimReward} />}
         {tab === 'hq'       && <HQTab state={state} setState={setState} mode={mode} sync={sync} forgetDevice={forgetDevice} saveNow={saveNow} showToast={showToast} />}
       </main>
+      {guide && <FieldGuidePage animal={guide} onClose={() => setGuide(null)} />}
       {toast && <Toast key={toast.id} toast={toast} />}
       {levelUp && <LevelUpOverlay level={levelUp} />}
       {sideFx === 'dribble' && <SideQuestOverlay days={state.config.dribbleUp.goal} title="CHAMPION" line="🏀 DRIBBLE UP MASTERED 🏀" prize={state.config.dribbleUp.prize} color={C.clay} />}
@@ -382,7 +398,7 @@ function TabBar({ tab, setTab }) {
 // =====================================================
 // BASE CAMP (dashboard)
 // =====================================================
-function BaseTab({ state, setTab }) {
+function BaseTab({ state, setTab, answerQuiz, openGuide }) {
   const todayLog = state.logs.daily[todayStr()] || { quests: [] };
   const questsDone = (todayLog.quests || []).length;
   const booksDone = Object.keys(state.logs.ssyra).length;
@@ -424,6 +440,8 @@ function BaseTab({ state, setTab }) {
         <SideQuestCard emoji="🏀" title={`${state.config.dribbleUp.goal}-DAY DRIBBLE`} prize={state.config.dribbleUp.prize} count={dribbleCount} goal={state.config.dribbleUp.goal} color={C.clay} />
       </div>
 
+      <QuizCard state={state} answerQuiz={answerQuiz} openGuide={openGuide} />
+
       <SectionHeader icon={Compass} title="FIELD BRIEFING" sub={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         <StatCard onClick={() => setTab('missions')} icon={Compass} label="MISSIONS" value={`${questsDone}/${state.config.quests.length}`} accent={C.teal} />
@@ -442,14 +460,15 @@ function BaseTab({ state, setTab }) {
       </div>
 
       {latest && (
-        <div style={{ ...card(STATUS_COLOR(latest.status)), marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+        <button onClick={() => openGuide(latest)} style={{ ...card(STATUS_COLOR(latest.status)), width: '100%', background: 'rgba(255,255,255,0.03)', color: C.text, textAlign: 'left', cursor: 'pointer', marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ fontSize: 42 }} aria-hidden="true">{latest.emoji}</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div className="display" style={{ fontSize: 11, color: STATUS_COLOR(latest.status) }}>NEWEST IN YOUR SANCTUARY</div>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>{latest.name}</div>
-            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{latest.fact}</div>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>{latest.name} <i style={{ fontWeight: 600, color: C.muted }}>{latest.sci}</i></div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{latest.facts[0]}</div>
+            <div className="display" style={{ fontSize: 10, color: C.teal, marginTop: 4 }}>OPEN FIELD GUIDE →</div>
           </div>
-        </div>
+        </button>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
@@ -684,7 +703,7 @@ function Field({ label, children }) {
 // =====================================================
 // RANGER (ranks + sanctuary)
 // =====================================================
-function RangerTab({ state, equipRank }) {
+function RangerTab({ state, equipRank, openGuide }) {
   const lvl = levelFromXp(state.player.xp);
   const equipped = state.player.equippedRank;
   const rank = getRank(equipped);
@@ -730,28 +749,147 @@ function RangerTab({ state, equipRank }) {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <SectionHeader icon={PawPrint} title="WILDLIFE SANCTUARY" sub={`${rescued} / ${SANCTUARY.length} species protected · a new one every 2 levels`} />
+        <SectionHeader icon={PawPrint} title="FIELD GUIDE" sub={`${rescued} / ${SANCTUARY.length} species unlocked · a new one every level · tap to open`} />
+        <QuizStats state={state} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
           {SANCTUARY.map(a => {
             const open = a.level <= lvl;
             const sc = STATUS_COLOR(a.status);
             return (
-              <div key={a.id} style={{ padding: 12, borderRadius: 10, background: open ? `linear-gradient(180deg, ${sc}1f, transparent 80%)` : 'rgba(0,0,0,0.35)', border: `1.5px solid ${open ? sc : 'rgba(255,255,255,0.12)'}` }}>
+              <button key={a.id} onClick={() => open && openGuide(a)} disabled={!open} aria-label={open ? `Open field guide: ${a.name}` : `Locked until level ${a.level}`} style={{ padding: 12, borderRadius: 10, color: C.text, textAlign: 'left', cursor: open ? 'pointer' : 'default', background: open ? `linear-gradient(180deg, ${sc}1f, transparent 80%)` : 'rgba(0,0,0,0.35)', border: `1.5px solid ${open ? sc : 'rgba(255,255,255,0.12)'}` }}>
                 <div style={{ fontSize: 36, textAlign: 'center', filter: open ? 'none' : 'grayscale(1) brightness(0.35)' }} aria-hidden="true">{a.emoji}</div>
                 <div style={{ fontWeight: 800, fontSize: 13.5, textAlign: 'center', marginTop: 4 }}>{open ? a.name : '???'}</div>
                 {open ? (
                   <>
                     <div className="display" style={{ fontSize: 9.5, color: sc, textAlign: 'center', marginTop: 2 }}>{a.status.toUpperCase()}</div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.35 }}>{a.fact}</div>
+                    <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', fontStyle: 'italic' }}>{a.sci}</div>
+                    <div className="display" style={{ fontSize: 10, color: C.teal, textAlign: 'center', marginTop: 6 }}>OPEN FILE →</div>
                   </>
                 ) : (
                   <div style={{ fontSize: 12, color: C.sun, textAlign: 'center', marginTop: 4 }}>🔒 Reach level {a.level}</div>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
-        <Tip>Statuses come from the IUCN Red List, which scientists use to track how much danger a species is in. The Florida panther's status is from the U.S. endangered species list.</Tip>
+        <Tip>Statuses come from the IUCN Red List (Least Concern → Vulnerable → Endangered → Critically Endangered). The Florida panther's status is from the U.S. endangered species list. Population numbers are the latest published estimates (2025–2026) and change as scientists count again.</Tip>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================
+// DAILY FIELD QUIZ + FIELD GUIDE PAGE
+// =====================================================
+function QuizCard({ state, answerQuiz, openGuide }) {
+  const day = todayStr();
+  const saved = state.logs.quiz[day];
+  const q = dailyQuestion(day, levelFromXp(state.player.xp), saved?.qid);
+  const unlocked = q.animal.level <= levelFromXp(state.player.xp);
+  return (
+    <div style={{ ...card(C.teal), background: 'linear-gradient(135deg, rgba(79,209,197,0.16), rgba(183,148,244,0.1))', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 22 }} aria-hidden="true">🧠</span>
+        <div className="display" style={{ fontSize: 13, color: C.teal, flex: 1 }}>DAILY FIELD QUIZ</div>
+        <Pill color={C.sun} text={`+${state.config.quiz.xp} XP · +${state.config.quiz.credits} ${CUR}`} />
+      </div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{q.animal.emoji} {unlocked ? q.animal.name : 'Mystery species'}</div>
+      <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.35, marginBottom: 10 }}>{q.q}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {q.options.map((opt, i) => {
+          const isAnswer = i === q.answer;
+          const isPick = saved && saved.pick === i;
+          const bg = !saved ? 'rgba(255,255,255,0.06)' : isAnswer ? 'rgba(123,211,137,0.25)' : isPick ? 'rgba(255,107,107,0.22)' : 'rgba(255,255,255,0.03)';
+          const bd = !saved ? 'rgba(79,209,197,0.5)' : isAnswer ? C.leaf : isPick ? C.red : 'rgba(255,255,255,0.1)';
+          return (
+            <button key={i} onClick={() => answerQuiz(i)} disabled={!!saved} style={{ padding: '11px 12px', borderRadius: 8, textAlign: 'left', cursor: saved ? 'default' : 'pointer', background: bg, border: `1.5px solid ${bd}`, color: C.text, fontSize: 14.5, fontWeight: 700, display: 'flex', gap: 8 }}>
+              <span style={{ color: C.teal }}>{'ABC'[i]}.</span><span style={{ flex: 1 }}>{opt}</span>
+              {saved && isAnswer && <span aria-label="correct">✅</span>}
+              {saved && isPick && !isAnswer && <span aria-label="your answer">❌</span>}
+            </button>
+          );
+        })}
+      </div>
+      {saved && (
+        <div className="scale-in" style={{ marginTop: 10, fontSize: 13.5, lineHeight: 1.45 }}>
+          <b style={{ color: saved.correct ? C.leaf : C.sun }}>{saved.correct ? 'Correct! ' : 'Good try! '}</b>{q.why}
+          {unlocked && <button onClick={() => openGuide(q.animal)} style={{ display: 'block', marginTop: 6, background: 'none', border: 'none', padding: 0, color: C.teal, cursor: 'pointer', fontWeight: 800, fontSize: 13 }}>Read the {q.animal.name} file →</button>}
+          <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>A new question unlocks tomorrow.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuizStats({ state }) {
+  const all = Object.values(state.logs.quiz || {});
+  if (!all.length) return null;
+  const right = all.filter(x => x.correct).length;
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <CareerCard label="QUIZZES" value={all.length} />
+      <CareerCard label="CORRECT" value={right} />
+      <CareerCard label="ACCURACY" value={`${Math.round((right / all.length) * 100)}%`} />
+    </div>
+  );
+}
+
+function FieldGuidePage({ animal: a, onClose }) {
+  const sc = STATUS_COLOR(a.status);
+  const ref = useRef(null);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    ref.current?.focus();
+    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  const Section = ({ icon, title, children }) => (
+    <div style={{ marginTop: 14 }}>
+      <div className="display" style={{ fontSize: 12, color: C.sun, marginBottom: 4 }}>{icon} {title}</div>
+      <div style={{ fontSize: 14, lineHeight: 1.5 }}>{children}</div>
+    </div>
+  );
+  const Stat = ({ label, value }) => (
+    <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(123,211,137,0.25)', borderRadius: 8, padding: '8px 10px' }}>
+      <div className="display" style={{ fontSize: 9.5, color: C.leaf }}>{label}</div>
+      <div style={{ fontSize: 13, lineHeight: 1.35, marginTop: 2 }}>{value}</div>
+    </div>
+  );
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`${a.name} field guide`} onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(3,10,7,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div ref={ref} tabIndex={-1} className="slide-up" onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto', background: '#0E2418', borderTop: `3px solid ${sc}`, borderRadius: '16px 16px 0 0', padding: '16px 16px 28px', outline: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ fontSize: 54, lineHeight: 1 }} aria-hidden="true">{a.emoji}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="display" style={{ fontSize: 10, color: C.teal }}>FIELD FILE #{String(a.level).padStart(2, '0')}</div>
+            <h2 className="display" style={{ fontSize: 22, margin: '2px 0 0', color: '#fff', lineHeight: 1.1 }}>{a.name}</h2>
+            <div style={{ fontStyle: 'italic', color: C.muted, fontSize: 14 }}>{a.sci}</div>
+            <div style={{ fontSize: 12, color: C.muted }}>{a.group}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close field guide" style={{ ...btn('rgba(255,255,255,0.08)', '#fff'), padding: '6px 10px', fontSize: 16 }}>✕</button>
+        </div>
+        <div style={{ display: 'inline-block', marginTop: 10, padding: '4px 10px', borderRadius: 999, background: `${sc}25`, border: `1.5px solid ${sc}`, color: sc, fontWeight: 800, fontSize: 12 }}>
+          {a.status.toUpperCase()}
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>📊 {a.population}</div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+          <Stat label="RANGE" value={a.range} />
+          <Stat label="HABITAT" value={a.habitat} />
+          <Stat label="DIET" value={a.diet} />
+          <Stat label="SIZE" value={a.size} />
+        </div>
+
+        <Section icon="⚡" title="SURVIVAL ADAPTATIONS">
+          <ul style={{ margin: 0, paddingLeft: 18 }}>{a.adaptations.map((x, i) => <li key={i} style={{ marginBottom: 4 }}>{x}</li>)}</ul>
+        </Section>
+        <Section icon="🌿" title="ROLE IN THE ECOSYSTEM">{a.ecology}</Section>
+        <Section icon="⚠️" title="THREATS">{a.threats}</Section>
+        <Section icon="🛡️" title="WHAT'S HELPING">{a.helping}</Section>
+        <Section icon="🔬" title="EXPERT FACTS">
+          <ul style={{ margin: 0, paddingLeft: 18 }}>{a.facts.map((x, i) => <li key={i} style={{ marginBottom: 4 }}>{x}</li>)}</ul>
+        </Section>
       </div>
     </div>
   );
@@ -901,6 +1039,11 @@ function HQRates({ state, setState }) {
   const H = ({ color, children }) => <div className="display" style={{ fontSize: 13, color, margin: '14px 0 8px' }}>{children}</div>;
   return (
     <div style={{ ...card(C.leaf), background: 'rgba(123,211,137,0.06)' }}>
+      <H color={C.teal}>🧠 DAILY FIELD QUIZ</H>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <Field label="XP / CORRECT"><input type="number" value={state.config.quiz.xp} onChange={n('quiz.xp')} style={inputStyle} /></Field>
+        <Field label="COINS / CORRECT"><input type="number" value={state.config.quiz.credits} onChange={n('quiz.credits')} style={inputStyle} /></Field>
+      </div>
       <H color={C.berry}>RESEARCH LAB (MATH)</H>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <Field label="XP / PAGE"><input type="number" value={r.mathXpPerPage} onChange={n('rates.mathXpPerPage')} style={inputStyle} /></Field>

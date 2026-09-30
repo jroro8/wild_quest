@@ -57,11 +57,13 @@ export const DEFAULT_STATE = {
     dribbleUp: { goal: 60, rewardXp: 1500, rewardCredits: 1000, prize: 'Mini Christmas Tree' },
     guitarPractice: { goal: 30, rewardXp: 750, rewardCredits: 500, prize: 'Order 66' },
     rates: { mathXpPerPage: 50, mathVbPerPage: 15 },
+    quiz: { xp: 30, credits: 15 },
   },
   logs: {
     daily: {},    // 'YYYY-MM-DD': { quests: [], math: [] }
     ssyra: {},    // bookId: dateStr
     claimed: [],  // [{ rewardId, name, cost, rarity, date }]
+    quiz: {},     // 'YYYY-MM-DD': { qid, pick, correct }
   },
 };
 
@@ -78,11 +80,13 @@ export const mergeState = (parsed = {}) => {
       ssyra: { ...DEFAULT_STATE.config.ssyra, ...(c.ssyra || {}) },
       dribbleUp: { ...DEFAULT_STATE.config.dribbleUp, ...(c.dribbleUp || {}) },
       guitarPractice: { ...DEFAULT_STATE.config.guitarPractice, ...(c.guitarPractice || {}) },
+      quiz: { ...DEFAULT_STATE.config.quiz, ...(c.quiz || {}) },
     },
     logs: {
       daily: { ...((parsed.logs || {}).daily || {}) },
       ssyra: { ...((parsed.logs || {}).ssyra || {}) },
       claimed: [...((parsed.logs || {}).claimed || [])],
+      quiz: { ...((parsed.logs || {}).quiz || {}) },
     },
   };
 };
@@ -124,29 +128,5 @@ export const JEDI_RANK_MAP = {
 export const getRank = (id) => RANKS.find(r => r.id === id) || RANKS[0];
 export const getUnlockedRanks = (level) => RANKS.filter(r => r.unlockLevel <= level);
 
-// ---------- SANCTUARY: one species joins every 2 levels ----------
-// Status = IUCN Red List category unless noted.
-export const SANCTUARY = [
-  { id: 'a1',  emoji: '🐢', name: 'Loggerhead Sea Turtle', status: 'Vulnerable',             level: 1,  fact: 'Loggerheads nest on Florida beaches every summer. Lights off at night helps hatchlings find the ocean.' },
-  { id: 'a2',  emoji: '🦅', name: 'Bald Eagle',            status: 'Recovered',              level: 3,  fact: 'Once nearly gone in the lower 48 states, bald eagles came back after DDT was banned and left the endangered list in 2007.' },
-  { id: 'a3',  emoji: '🐋', name: 'Humpback Whale',        status: 'Least Concern',          level: 5,  fact: 'After whaling bans, humpbacks bounced back. They sing long songs that can travel for miles underwater.' },
-  { id: 'a4',  emoji: '🦦', name: 'Sea Otter',             status: 'Endangered',             level: 7,  fact: 'Sea otters eat sea urchins, which protects kelp forests. They hold hands while sleeping so they don\'t drift apart.' },
-  { id: 'a5',  emoji: '🐆', name: 'Florida Panther',       status: 'Endangered (U.S. list)', level: 9,  fact: 'Only a small population lives in southwest Florida. Wildlife crossings under highways help keep them safe.' },
-  { id: 'a6',  emoji: '🐨', name: 'Koala',                 status: 'Vulnerable',             level: 11, fact: 'Koalas eat almost only eucalyptus leaves. Wildfires and land clearing have destroyed much of their forest.' },
-  { id: 'a7',  emoji: '🐼', name: 'Giant Panda',           status: 'Vulnerable',             level: 13, fact: 'Protecting bamboo forests helped pandas move from Endangered to Vulnerable in 2016.' },
-  { id: 'a8',  emoji: '🐻‍❄️', name: 'Polar Bear',           status: 'Vulnerable',             level: 15, fact: 'Polar bears hunt seals from sea ice. As the Arctic warms, the ice they depend on is shrinking.' },
-  { id: 'a9',  emoji: '🐘', name: 'African Savanna Elephant', status: 'Endangered',          level: 17, fact: 'Elephants dig water holes and spread seeds, shaping the savanna for many other animals.' },
-  { id: 'a10', emoji: '🐅', name: 'Tiger',                 status: 'Endangered',             level: 19, fact: 'Every tiger\'s stripe pattern is unique, like a fingerprint. Rangers use camera traps to count them.' },
-  { id: 'a11', emoji: '🦍', name: 'Mountain Gorilla',      status: 'Endangered',             level: 21, fact: 'Mountain gorillas are one of the few great apes whose numbers are growing, thanks to ranger patrols.' },
-  { id: 'a12', emoji: '🦧', name: 'Sumatran Orangutan',    status: 'Critically Endangered',  level: 23, fact: 'Orangutans build a fresh nest in the treetops almost every night.' },
-  { id: 'a13', emoji: '🦏', name: 'Black Rhino',           status: 'Critically Endangered',  level: 25, fact: 'Black rhinos have a hooked lip for grabbing twigs. Anti-poaching rangers guard them day and night.' },
-  { id: 'a14', emoji: '🦎', name: 'Axolotl',               status: 'Critically Endangered',  level: 27, fact: 'Axolotls can regrow legs and even parts of their heart. In the wild they live only near Mexico City.' },
-  { id: 'a15', emoji: '🐬', name: 'Vaquita',               status: 'Critically Endangered',  level: 29, fact: 'The vaquita is the world\'s rarest marine mammal, found only in the northern Gulf of California.' },
-];
-
-export const STATUS_COLOR = (status) => {
-  if (status.startsWith('Critically')) return '#FF6B6B';
-  if (status.startsWith('Endangered')) return '#FF8A5B';
-  if (status.startsWith('Vulnerable')) return '#F4B942';
-  return '#7BD389';
-};
+// Field guide species, statuses and the daily quiz live in animals.js
+export { SANCTUARY, STATUS_COLOR, dailyQuestion } from './animals.js';
